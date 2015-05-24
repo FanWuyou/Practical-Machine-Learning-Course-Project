@@ -1,0 +1,100 @@
+---
+title: "Use Machine Learning to Predict the Manner"
+output: html_document
+---
+
+#load the data
+```{r,cache=TRUE}
+data<-read.csv("pml-training.csv",na.strings=c("NA","#DIV/0!"))
+##summary(data)
+```
+
+#Clean data
+Some variance is almost all "NA",omit these line.
+Rowname and user name should not be related with classes.
+Omit all this variance.
+```{r,cache=TRUE}
+d=c(160)
+for (i in c(8:159)){
+  if (sum(is.na(data[,i]))<10000){
+    d=c(d,i)
+  }
+}
+data1<-data[,d]
+```
+
+#Slicing Data
+```{r,cache=TRUE}
+library(caret)
+set.seed=1
+folds<-createFolds(y=data1$classe,k=3,list=TRUE,returnTrain=TRUE)
+```
+
+#Predicting with trees
+First, Because there is still a lot of NA in the table, I use random forest.
+```{r,cache=TRUE}
+##data11<-data1[folds[[1]],]
+##modFit1<-train(classe~.,method="rf",data=data11)
+```
+It return error because ram is not big enough.
+So I decided to predict with trees.
+```{r,cache=TRUE}
+##data11<-data1[folds[[1]],]
+##modFit1<-train(classe~.,method="rpart",data=data11)
+```
+But the accuracy is poor, and there is no "D" in prediction.
+It shows that the model is to be too simple.
+So I use the model with high cp, and use the answer with highest probability as true answer.
+```{r,cache=TRUE}
+library(rpart)
+data11<-data1[folds[[1]],]
+modFit1<-rpart(classe~.,data=data11)
+abcde<-function(x){
+  pred <- predict(modFit1,newdata=x)
+  answer=c()
+  abc=c("A","B","C","D","E")
+  for (i in (1:(length(pred)/5))){
+    answer=c(answer,abc[which(pred[i,]==max(pred[i,]))])
+  }
+  answer<-as.factor(answer)
+  return(answer)
+}
+answer<-abcde(data11)
+confusionMatrix(answer,data11[,1])[c(2,3)]
+answer<-abcde(data1[-folds[[1]],])
+confusionMatrix(answer,data1[-folds[[1]],1])[c(2,3)]
+```
+This time it fit quite better.And the accuracy in traning data and testing data and nearly the same.
+So there is no clearly overfitting.
+
+##The out of sample error
+In my opinion, the sample error may cause over fitting, We can use cross-validation the estimate it.
+
+##Estimate the error appropriately with cross-validation
+```{r,cache=TRUE}
+a1<-confusionMatrix(answer,data1[-folds[[1]],1])$overall[1]
+data12<-data1[folds[[2]],]
+modFit1<-rpart(classe~.,data=data12)
+answer<-abcde(data1[-folds[[2]],])
+a2<-confusionMatrix(answer,data1[-folds[[2]],1])$overall[1]
+data13<-data1[folds[[3]],]
+modFit1<-rpart(classe~.,data=data13)
+answer<-abcde(data1[-folds[[3]],])
+a3<-confusionMatrix(answer,data1[-folds[[3]],1])$overall[1]
+mean(a1,a2,a3)
+```
+So the Accuracy of this model is about 0.7255771.
+
+#Result
+```{r,cache=TRUE,warning=FALSE}
+modFit1<-rpart(classe~.,data=data1)
+plot(modFit1,uniform=TRUE,main="Trees")
+text(modFit1,use.n=TRUE,cex=0.4)
+```
+
+#predict
+```{r,cache=TRUE}
+testing<-read.csv("pml-testing.csv",na.strings=c("NA","#DIV/0!"))
+answer<-abcde(testing)
+answer
+```
